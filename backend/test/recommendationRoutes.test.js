@@ -20,7 +20,16 @@ test("validates the evaluation request and forwards the mapped model input", asy
     response.end(JSON.stringify({
       classPrediction: 1,
       label: "DENEGADO",
+      verdict: "DENEGADO",
       confidence: 91.25,
+      indices: {
+        vulnerability: 85,
+        mechanicalDemand: 70,
+        thermalStress: 90,
+        combinedRisk: 82
+      },
+      ruleId: "R-003: Bloqueo preventivo",
+      justification: "Riesgo crítico",
       status: "success"
     }));
   });
@@ -54,8 +63,60 @@ test("validates the evaluation request and forwards the mapped model input", asy
       Topografia: "Montanosa",
       Clima: "Calor Extremo"
     });
-    assert.equal(body.prediction.label, "DENEGADO");
+    assert.equal(body.verdict, "Denegado");
+    assert.equal(body.verdictRaw, "DENEGADO");
     assert.equal(body.model, "battery_xgboost_v1");
+    assert.equal(body.indices.combinedRisk, 82);
+  } finally {
+    if (previousAiUrl === undefined) delete process.env.AI_SERVICE_URL;
+    else process.env.AI_SERVICE_URL = previousAiUrl;
+    await Promise.all([closeServer(apiServer), closeServer(aiServer)]);
+  }
+});
+
+test("supports PRECAUCION verdict and stress indices from AI service", async () => {
+  const aiServer = createServer((_req, res) => {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({
+      classPrediction: 0,
+      verdict: "PRECAUCION",
+      confidence: 79.1,
+      indices: {
+        vulnerability: 35,
+        mechanicalDemand: 55,
+        thermalStress: 20,
+        combinedRisk: 42
+      },
+      ruleId: "R-002: Despacho condicional con telemetría intensiva",
+      justification: "Se autoriza asignación con advertencia para EV-100000.",
+      status: "success"
+    }));
+  });
+  aiServer.listen(0, "127.0.0.1");
+  await once(aiServer, "listening");
+
+  const previousAiUrl = process.env.AI_SERVICE_URL;
+  process.env.AI_SERVICE_URL = `http://127.0.0.1:${aiServer.address().port}`;
+  const apiServer = createApp().listen(0, "127.0.0.1");
+  await once(apiServer, "listening");
+
+  try {
+    const baseUrl = `http://127.0.0.1:${apiServer.address().port}`;
+    const response = await fetch(`${baseUrl}/api/v1/recommendations/evaluate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ unit: "EV-100000", battery: "Buena", route: "Montaña", weather: "Templado" })
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.verdict, "Precaucion");
+    assert.equal(body.verdictRaw, "PRECAUCION");
+    assert.equal(body.indices.vulnerability, 35);
+    assert.equal(body.indices.mechanicalDemand, 55);
+    assert.equal(body.indices.thermalStress, 20);
+    assert.equal(body.indices.combinedRisk, 42);
+    assert.ok(body.ruleId.includes("R-002"));
   } finally {
     if (previousAiUrl === undefined) delete process.env.AI_SERVICE_URL;
     else process.env.AI_SERVICE_URL = previousAiUrl;

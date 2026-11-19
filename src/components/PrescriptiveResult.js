@@ -1,7 +1,7 @@
 /**
  * BatteryGuard AI - Componente Dictamen Prescriptivo
  * Visualiza la decisión técnica de IA: APROBADO, PRECAUCION o DENEGADO,
- * junto con la regla operativa activada y la justificación técnica.
+ * junto con la regla operativa activada, la justificación técnica y el origen de inferencia.
  */
 
 export function renderPrescriptiveResult(assessment) {
@@ -9,6 +9,7 @@ export function renderPrescriptiveResult(assessment) {
   const ruleId = assessment.ruleId || "R-001: Bateria saludable + Ruta plana + Clima templado";
   const justification = assessment.justification || 
     "La unidad EV-100000 cumple todos los criterios de seguridad para la ruta asignada. Riesgo combinado bajo.";
+  const isApi = assessment.source === "api" || assessment.source === "ai-service";
 
   // Configuración cromática y visual según el dictamen
   const verdictConfig = {
@@ -37,12 +38,25 @@ export function renderPrescriptiveResult(assessment) {
 
   const current = verdictConfig[verdict] || verdictConfig.Aprobado;
 
+  const sourceBadge = isApi
+    ? `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 shadow-2xs" title="Inferencia generada en tiempo real por el servicio XGBoost / FastAPI">
+         <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+         IA Live (XGBoost API) ${assessment.confidence ? `· ${assessment.confidence}%` : ''}
+       </span>`
+    : `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-600 border border-gray-250" title="Motor heurístico prescriptivo local integrado en el frontend">
+         <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+         Motor Local (Offline)
+       </span>`;
+
   return `
     <section class="mb-6" aria-labelledby="dictamen-title">
-      <!-- Título de sección -->
-      <h2 id="dictamen-title" class="text-base sm:text-lg font-bold text-gray-900 tracking-tight mb-3">
-        Dictamen Prescriptivo
-      </h2>
+      <!-- Encabezado con título e indicador de fuente -->
+      <div class="flex items-center justify-between mb-3">
+        <h2 id="dictamen-title" class="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
+          Dictamen Prescriptivo
+        </h2>
+        ${sourceBadge}
+      </div>
 
       <!-- Card Principal del Dictamen -->
       <div class="bg-white rounded-3xl p-5 border border-gray-200/90 shadow-xs mb-3">
@@ -73,7 +87,7 @@ export function renderPrescriptiveResult(assessment) {
         </div>
       </div>
 
-      <!-- Selector o píldoras secundarias de visualización rápida (exactas a la página 2 del PDF) -->
+      <!-- Píldoras secundarias de visualización rápida -->
       <div class="grid grid-cols-2 gap-3" aria-label="Simulación de otros dictámenes">
         <button 
           type="button" 

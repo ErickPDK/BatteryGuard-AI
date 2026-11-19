@@ -13,66 +13,69 @@ import { renderBottomNav, renderViewSwitcher, renderBrowserChrome } from "./comp
 
 class BatteryGuardApp {
   constructor() {
-    // Estado reactivo de la aplicación
     this.state = {
       viewMode: "auto", // 'auto' | 'mobile' | 'desktop'
       activeFilter: "Todas",
       activeScenarioId: 1,
       activeMobileTab: "panel",
+      isEvaluating: false,
       formValues: {
         unit: "EV-100000",
         battery: "Buena",
         route: "Plana",
         weather: "Templado"
       },
-      currentAssessment: null
+      currentAssessment: RecommendationEngine.evaluateLocal({
+        unit: "EV-100000",
+        battery: "Buena",
+        route: "Plana",
+        weather: "Templado"
+      })
     };
-
-    // Inicializar evaluación con el escenario 1
-    this.state.currentAssessment = RecommendationEngine.evaluate(this.state.formValues);
   }
 
-  init() {
+  async init() {
     this.render();
     this.bindEvents();
+
+    // Intentar evaluación inicial con la API en segundo plano
+    try {
+      const live = await RecommendationEngine.evaluate(this.state.formValues);
+      if (live && live.source === "api") {
+        this.state.currentAssessment = live;
+        this.render();
+      }
+    } catch {
+      // Mantiene el motor local inicial
+    }
   }
 
-  /**
-   * Renderiza la aplicación completa según el modo de visualización
-   */
   render() {
     const root = document.getElementById("app");
     if (!root) return;
 
     const { viewMode, activeFilter, activeScenarioId, formValues, currentAssessment } = this.state;
-
-    // Barra de herramientas superior para alternar vistas (Mobile vs Desktop)
     const viewSwitcherHtml = renderViewSwitcher(viewMode);
-
     let contentHtml = "";
 
     if (viewMode === "mobile") {
-      // MODO SIMULADOR MÓVIL (Páginas 1, 2, 3)
       contentHtml = `
         <div class="min-h-screen bg-slate-900/90 py-6 px-3 flex flex-col items-center justify-center">
           <div class="mobile-device-shell w-full max-w-[410px] bg-white text-gray-900 flex flex-col shadow-2xl">
             ${renderStatusBar()}
             
             <div id="mobile-scroll-container" class="flex-1 overflow-y-auto px-4 py-4 space-y-2 pb-16">
-              <!-- Header & KPIs (Página 1) -->
               <div id="section-panel" class="pt-1">
                 ${renderHeader()}
                 ${renderKpis()}
                 ${renderControlPanel(formValues)}
               </div>
 
-              <!-- Dictamen & Estrés (Página 2) -->
               <div id="section-results" class="pt-2">
                 ${renderPrescriptiveResult(currentAssessment)}
                 ${renderStressChart(currentAssessment.indices)}
               </div>
 
-              <!-- Base de Conocimientos (Página 3) -->
               <div id="section-knowledge" class="pt-2">
                 ${renderKnowledgeBase(activeFilter, activeScenarioId)}
               </div>
@@ -83,14 +86,12 @@ class BatteryGuardApp {
         </div>
       `;
     } else if (viewMode === "desktop") {
-      // MODO DESKTOP DASHBOARD (Página 4 y 8)
       contentHtml = `
         <div class="min-h-screen bg-gray-100 p-4 sm:p-6 lg:p-8 flex flex-col items-center">
           <div class="w-full max-w-7xl bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
             ${renderBrowserChrome()}
             
             <main class="p-6 lg:p-8 space-y-6">
-              <!-- Top Header & KPIs en línea horizontal -->
               <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 pb-2 border-b border-gray-150">
                 <div>
                   <div class="flex items-center gap-2.5">
@@ -106,21 +107,17 @@ class BatteryGuardApp {
                 </div>
               </div>
 
-              <!-- Layout de 2 Columnas -->
               <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                <!-- Columna Izquierda: Panel de Control -->
                 <div class="lg:col-span-5 xl:col-span-4">
                   ${renderControlPanel(formValues)}
                 </div>
 
-                <!-- Columna Derecha: Dictamen Prescriptivo e Índices de Estrés -->
                 <div class="lg:col-span-7 xl:col-span-8 space-y-6">
                   ${renderPrescriptiveResult(currentAssessment)}
                   ${renderStressChart(currentAssessment.indices)}
                 </div>
               </div>
 
-              <!-- Base de Conocimientos a todo lo ancho -->
               <div class="pt-2">
                 ${renderKnowledgeBase(activeFilter, activeScenarioId)}
               </div>
@@ -129,16 +126,13 @@ class BatteryGuardApp {
         </div>
       `;
     } else {
-      // MODO RESPONSIVE AUTOMÁTICO (Mobile First puro con adaptación fluida a desktop)
       contentHtml = `
         <div class="min-h-screen bg-gray-50 flex flex-col">
-          <!-- Status bar visible en móviles -->
           <div class="sm:hidden">
             ${renderStatusBar()}
           </div>
 
           <main class="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
-            <!-- Header y KPIs -->
             <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
               ${renderHeader()}
               <div class="w-full lg:max-w-xl">
@@ -146,21 +140,17 @@ class BatteryGuardApp {
               </div>
             </div>
 
-            <!-- Grid Responsive Adaptable -->
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              <!-- Panel de Control -->
               <div id="section-panel" class="lg:col-span-5 xl:col-span-4">
                 ${renderControlPanel(formValues)}
               </div>
 
-              <!-- Dictamen Prescriptivo & Gráfico de Estrés -->
               <div id="section-results" class="lg:col-span-7 xl:col-span-8 space-y-6">
                 ${renderPrescriptiveResult(currentAssessment)}
                 ${renderStressChart(currentAssessment.indices)}
               </div>
             </div>
 
-            <!-- Base de Conocimientos -->
             <div id="section-knowledge" class="mt-6">
               ${renderKnowledgeBase(activeFilter, activeScenarioId)}
             </div>
@@ -179,32 +169,24 @@ class BatteryGuardApp {
     this.bindEvents();
   }
 
-  /**
-   * Vincula eventos de la interfaz
-   */
   bindEvents() {
-    // 1. Selector de Modo de Vista (Mobile / Desktop / Responsive)
     document.querySelectorAll("[data-view-mode]").forEach(btn => {
       btn.onclick = () => {
-        const mode = btn.getAttribute("data-view-mode");
-        this.state.viewMode = mode;
+        this.state.viewMode = btn.getAttribute("data-view-mode");
         this.render();
       };
     });
 
-    // 2. Botón Evaluar Asignación
     const btnEvaluate = document.getElementById("btn-evaluate");
     if (btnEvaluate) {
       btnEvaluate.onclick = () => this.handleEvaluate();
     }
 
-    // 3. Botón Restablecer
     const btnReset = document.getElementById("btn-reset");
     if (btnReset) {
       btnReset.onclick = () => this.handleReset();
     }
 
-    // 4. Cambios en selects del formulario
     const form = document.getElementById("evaluation-form");
     if (form) {
       const inputs = form.querySelectorAll("input, select");
@@ -215,16 +197,13 @@ class BatteryGuardApp {
       });
     }
 
-    // 5. Filtros de la Base de Conocimientos (Todas, Aprobadas, Precaución, Denegadas)
     document.querySelectorAll("[data-filter]").forEach(btn => {
       btn.onclick = () => {
-        const filter = btn.getAttribute("data-filter");
-        this.state.activeFilter = filter;
+        this.state.activeFilter = btn.getAttribute("data-filter");
         this.render();
       };
     });
 
-    // 6. Clic en filas de la tabla de escenarios (Carga rápida en el panel)
     document.querySelectorAll("[data-scenario-id]").forEach(row => {
       row.onclick = () => {
         const scenarioId = parseInt(row.getAttribute("data-scenario-id"), 10);
@@ -232,7 +211,6 @@ class BatteryGuardApp {
       };
     });
 
-    // 7. Simulación rápida desde píldoras de veredicto
     document.querySelectorAll("[data-simulate-verdict]").forEach(btn => {
       btn.onclick = () => {
         const targetVerdict = btn.getAttribute("data-simulate-verdict");
@@ -243,7 +221,6 @@ class BatteryGuardApp {
       };
     });
 
-    // 8. Navegación rápida inferior en móvil
     document.querySelectorAll("[data-nav-target]").forEach(btn => {
       btn.onclick = () => {
         const targetId = btn.getAttribute("data-nav-target");
@@ -255,11 +232,12 @@ class BatteryGuardApp {
     });
   }
 
-  handleEvaluate() {
+  async handleEvaluate() {
     const unitInput = document.getElementById("input-unit");
     const batterySelect = document.getElementById("select-battery");
     const routeSelect = document.getElementById("select-route");
     const weatherSelect = document.getElementById("select-weather");
+    const btnEvaluate = document.getElementById("btn-evaluate");
 
     const unit = unitInput?.value.trim() || "EV-100000";
     const battery = batterySelect?.value || "Buena";
@@ -267,12 +245,25 @@ class BatteryGuardApp {
     const weather = weatherSelect?.value || "Templado";
 
     this.state.formValues = { unit, battery, route, weather };
-    this.state.currentAssessment = RecommendationEngine.evaluate(this.state.formValues);
-    this.state.activeScenarioId = this.state.currentAssessment.matchedScenarioId;
 
-    this.render();
+    if (btnEvaluate) {
+      btnEvaluate.disabled = true;
+      btnEvaluate.innerHTML = `
+        <svg class="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+        </svg>
+        Consultando IA...
+      `;
+    }
 
-    // Scroll suave hacia los resultados en móvil
+    try {
+      this.state.currentAssessment = await RecommendationEngine.evaluate(this.state.formValues);
+      this.state.activeScenarioId = this.state.currentAssessment.matchedScenarioId;
+    } finally {
+      this.render();
+    }
+
     const resultsSection = document.getElementById("section-results");
     if (resultsSection && window.innerWidth < 1024) {
       setTimeout(() => {
@@ -289,11 +280,11 @@ class BatteryGuardApp {
       weather: "Templado"
     };
     this.state.activeScenarioId = 1;
-    this.state.currentAssessment = RecommendationEngine.evaluate(this.state.formValues);
+    this.state.currentAssessment = RecommendationEngine.evaluateLocal(this.state.formValues);
     this.render();
   }
 
-  loadScenario(scenarioId) {
+  async loadScenario(scenarioId) {
     const sc = SCENARIOS.find(s => s.id === scenarioId);
     if (!sc) return;
 
@@ -305,10 +296,10 @@ class BatteryGuardApp {
       weather: sc.weather
     };
 
-    this.state.currentAssessment = RecommendationEngine.evaluate(this.state.formValues);
+    // Evaluar asíncronamente para sincronizar con la API si está activa
+    this.state.currentAssessment = await RecommendationEngine.evaluate(this.state.formValues);
     this.render();
 
-    // Feedback visual suave
     const resultsSection = document.getElementById("section-results");
     if (resultsSection) {
       resultsSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -316,7 +307,6 @@ class BatteryGuardApp {
   }
 }
 
-// Iniciar aplicación cuando el DOM esté listo
 document.addEventListener("DOMContentLoaded", () => {
   const app = new BatteryGuardApp();
   app.init();

@@ -19,8 +19,8 @@ const weatherMap = {
 
 export function toModelInput({ battery, route, weather }) {
   return {
-    SOH: batteryMap[battery],
-    Topografia: routeMap[route],
-    Clima: weatherMap[weather]
+    SOH: batteryMap[battery] || "Optima",
+    Topografia: routeMap[route] || "Plana",
+    Clima: weatherMap[weather] || "Templado"
   };
 }

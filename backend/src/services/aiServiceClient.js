@@ -1,9 +1,25 @@
 import { z } from "zod";
 
+const indicesSchema = z.object({
+  vulnerability: z.number().min(0).max(100),
+  mechanicalDemand: z.number().min(0).max(100),
+  thermalStress: z.number().min(0).max(100),
+  combinedRisk: z.number().min(0).max(100)
+});
+
 const predictionSchema = z.object({
-  classPrediction: z.number().int(),
-  label: z.enum(["APROBADO", "DENEGADO"]),
+  classPrediction: z.number().int().optional(),
+  label: z.string().optional(),
+  binaryLabel: z.string().optional(),
+  verdict: z.enum(["APROBADO", "PRECAUCION", "DENEGADO"]).default("APROBADO"),
   confidence: z.number().min(0).max(100),
+  probabilities: z.object({
+    safe: z.number(),
+    failure: z.number()
+  }).optional(),
+  indices: indicesSchema.optional(),
+  ruleId: z.string().optional(),
+  justification: z.string().optional(),
   status: z.literal("success")
 });
 
@@ -40,6 +56,11 @@ export async function requestPrediction(modelInput) {
     error.status = 502;
     error.cause = cause;
     throw error;
+  }
+
+  // Compatibilidad: si el servicio devuelve 'label' pero no 'verdict'
+  if (body && !body.verdict && body.label) {
+    body.verdict = body.label === "DENEGADO" ? "DENEGADO" : "APROBADO";
   }
 
   const parsed = predictionSchema.safeParse(body);

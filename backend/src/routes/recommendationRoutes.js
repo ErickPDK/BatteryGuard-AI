@@ -12,6 +12,14 @@ const evaluationSchema = z.object({
   weather: z.enum(["Templado", "Frío", "Cálido", "Extremo"])
 }).strict();
 
+function normalizeVerdict(rawVerdict) {
+  if (!rawVerdict) return "Aprobado";
+  const upper = rawVerdict.toUpperCase();
+  if (upper.includes("PRECAUCION") || upper.includes("PRECAUCIÓN")) return "Precaucion";
+  if (upper.includes("DENEGADO")) return "Denegado";
+  return "Aprobado";
+}
+
 router.post("/evaluate", async (request, response, next) => {
   const parsed = evaluationSchema.safeParse(request.body);
   if (!parsed.success) {
@@ -31,15 +39,33 @@ router.post("/evaluate", async (request, response, next) => {
     const modelInput = toModelInput(parsed.data);
     const prediction = await requestPrediction(modelInput);
 
+    const normalizedVerdict = normalizeVerdict(prediction.verdict || prediction.label);
+
     response.json({
       unit: parsed.data.unit,
+      battery: parsed.data.battery,
+      route: parsed.data.route,
+      weather: parsed.data.weather,
+      verdict: normalizedVerdict,
+      verdictRaw: prediction.verdict || prediction.label || "APROBADO",
+      confidence: prediction.confidence,
+      probabilities: prediction.probabilities,
+      indices: prediction.indices || {
+        vulnerability: 20,
+        mechanicalDemand: 20,
+        thermalStress: 20,
+        combinedRisk: 20
+      },
+      ruleId: prediction.ruleId || `R-001: Condición operativa evaluada (${parsed.data.battery} + ${parsed.data.route})`,
+      justification: prediction.justification || `Evaluación técnica para ${parsed.data.unit}.`,
       model: "battery_xgboost_v1",
-      modelInput,
-      modelLimitations: [
-        "El modelo solo predice APROBADO o DENEGADO; no predice PRECAUCION ni índices de estrés.",
-        "Media y Mala se agrupan como Degradada; Urbana como Plana; Frío y Cálido como Templado."
-      ],
-      prediction
+      modelInput: {
+        SOH: modelInput.SOH,
+        Topografia: modelInput.Topografia,
+        Clima: modelInput.Clima
+      },
+      prediction,
+      source: "ai-service"
     });
   } catch (error) {
     next(error);

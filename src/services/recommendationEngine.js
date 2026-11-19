@@ -1,22 +1,65 @@
 /**
  * BatteryGuard AI - Recommendation & Prescriptive Analytics Engine
- * Evalúa el desgaste de la batería vs condiciones de ruta y clima para generar dictámenes prescriptivos
+ * Conecta el frontend con la API Node.js (que consume el microservicio de IA FastAPI)
+ * y provee fallback local automático si la API está desconectada.
  */
 
 import { SCENARIOS } from "../data/scenarios.js";
 
+const DEFAULT_API_BASE = "http://localhost:3000";
+
 export class RecommendationEngine {
   /**
-   * Evalúa la viabilidad de asignación para un vehículo eléctrico
+   * Evalúa la viabilidad de asignación consultando la API en vivo o usando fallback local.
    * @param {Object} params
-   * @param {string} params.unit - Identificador del vehículo (ej: 'EV-100000')
+   * @param {string} params.unit - Identificador del vehículo
    * @param {string} params.battery - Estado de la batería ('Buena', 'Media', 'Mala')
    * @param {string} params.route - Topografía de la ruta ('Plana', 'Urbana', 'Montaña')
    * @param {string} params.weather - Clima esperado ('Templado', 'Frío', 'Cálido', 'Extremo')
-   * @returns {Object} Resultado del dictamen prescriptivo con índices de estrés
+   * @returns {Promise<Object>} Resultado del dictamen prescriptivo con índices de estrés
    */
-  static evaluate({ unit = "EV-100000", battery, route, weather }) {
-    // 1. Buscar coincidencia exacta en los 8 escenarios de la base de conocimientos
+  static async evaluate({ unit = "EV-100000", battery = "Buena", route = "Plana", weather = "Templado" }) {
+    try {
+      const response = await fetch(`${DEFAULT_API_BASE}/api/v1/recommendations/evaluate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unit, battery, route, weather }),
+        signal: AbortSignal.timeout(3000)
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          unit: data.unit || unit,
+          battery: data.battery || battery,
+          route: data.route || route,
+          weather: data.weather || weather,
+          verdict: data.verdict || "Aprobado", // 'Aprobado' | 'Precaucion' | 'Denegado'
+          ruleId: data.ruleId,
+          justification: data.justification,
+          indices: data.indices || {
+            vulnerability: 20,
+            mechanicalDemand: 20,
+            thermalStress: 20,
+            combinedRisk: 20
+          },
+          confidence: data.confidence,
+          probabilities: data.probabilities,
+          matchedScenarioId: this._findMatchingScenarioId(battery, route, weather),
+          source: "api"
+        };
+      }
+    } catch {
+      // Fallback transparente al motor local si la API está apagada o no responde
+    }
+
+    return this.evaluateLocal({ unit, battery, route, weather });
+  }
+
+  /**
+   * Evaluación síncrona / offline local basada en la base de conocimientos y heurística
+   */
+  static evaluateLocal({ unit = "EV-100000", battery = "Buena", route = "Plana", weather = "Templado" }) {
     const exactMatch = SCENARIOS.find(s => 
       s.battery.toLowerCase() === (battery || "").toLowerCase() &&
       s.route.toLowerCase() === (route || "").toLowerCase() &&
@@ -29,7 +72,7 @@ export class RecommendationEngine {
         battery: exactMatch.battery,
         route: exactMatch.route,
         weather: exactMatch.weather,
-        verdict: exactMatch.verdict, // 'Aprobado' | 'Precaucion' | 'Denegado'
+        verdict: exactMatch.verdict,
         ruleId: exactMatch.ruleId,
         justification: exactMatch.justification.replace("EV-100000", unit || "EV-100000"),
         indices: {
@@ -38,32 +81,37 @@ export class RecommendationEngine {
           thermalStress: exactMatch.thermalStress,
           combinedRisk: exactMatch.combinedRisk
         },
-        matchedScenarioId: exactMatch.id
+        matchedScenarioId: exactMatch.id,
+        source: "local"
       };
     }
 
-    // 2. Si no hay coincidencia directa, calcular heurística de degradación y estrés
     return this._calculateDynamicAssessment({ unit, battery, route, weather });
   }
 
+  static _findMatchingScenarioId(battery, route, weather) {
+    const found = SCENARIOS.find(s => 
+      s.battery.toLowerCase() === (battery || "").toLowerCase() &&
+      s.route.toLowerCase() === (route || "").toLowerCase() &&
+      s.weather.toLowerCase() === (weather || "").toLowerCase()
+    );
+    return found ? found.id : null;
+  }
+
   static _calculateDynamicAssessment({ unit, battery, route, weather }) {
-    // Valores de vulnerabilidad base según salud de batería
     let vuln = 20;
     if (battery === "Media") vuln = 35;
     if (battery === "Mala") vuln = 80;
 
-    // Factores mecánicos según topografía
     let mech = 10;
     if (route === "Urbana") mech = 15;
     if (route === "Montaña") mech = 58;
 
-    // Estrés térmico según clima
     let therm = 10;
     if (weather === "Frío") therm = 25;
     if (weather === "Cálido") therm = 38;
     if (weather === "Extremo") therm = 86;
 
-    // Ajustes cruzados (efecto acoplado)
     if (route === "Montaña" && weather === "Cálido") {
       therm += 15;
       mech += 5;
@@ -73,18 +121,15 @@ export class RecommendationEngine {
       therm += 8;
     }
 
-    // Normalizar a rangos [5, 98]
     vuln = Math.min(Math.max(vuln, 5), 98);
     mech = Math.min(Math.max(mech, 5), 98);
     therm = Math.min(Math.max(therm, 5), 98);
 
-    // Riesgo combinado ponderado: 40% vulnerabilidad + 30% mecánico + 30% térmico
     const combined = Math.min(
       Math.round(vuln * 0.4 + mech * 0.3 + therm * 0.3),
       99
     );
 
-    // Determinar Dictamen Prescriptivo
     let verdict = "Aprobado";
     let rulePrefix = "R-101";
     let ruleText = "Condición operativa segura";
@@ -116,7 +161,8 @@ export class RecommendationEngine {
         thermalStress: therm,
         combinedRisk: combined
       },
-      matchedScenarioId: null
+      matchedScenarioId: null,
+      source: "local"
     };
   }
 }

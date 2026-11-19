@@ -1,122 +1,100 @@
 # BatteryGuard AI
 
-Dashboard prescriptivo para la asignacion de rutas de una flota de vehiculos electricos. El proyecto combina un frontend responsive, una API REST y un servicio de inferencia con el modelo XGBoost de BatteryGuard.
+Dashboard prescriptivo para la asignacion de rutas de una flota de vehiculos electricos. El proyecto combina un frontend responsive (Mobile-First y Desktop), una API REST en Node.js y un servicio de inferencia con el modelo XGBoost de BatteryGuard en Python/FastAPI.
 
 ## Estado actual
 
 | Componente | Estado | Detalle |
 |---|---|---|
-| Frontend | Implementado | Dashboard mobile/desktop y motor local con 8 escenarios |
-| API Node | Implementado | Express 5, validacion Zod, mapeo de variables y cliente FastAPI |
-| Servicio IA | Implementado | FastAPI carga los artefactos XGBoost desde la carpeta configurada |
-| Compilacion frontend | Verificada | `npm run build` genera la salida de Vite en `dist/` |
-| Pruebas del backend | Verificadas | `npm test`: 2 pruebas aprobadas |
-| Integracion frontend -> API | Pendiente | El dashboard sigue usando `RecommendationEngine` local |
-| Prediccion PRECAUCION | Pendiente | El modelo actual solo devuelve `APROBADO` o `DENEGADO` |
-| Indices de estres por IA | Pendiente | Los indices siguen siendo calculados por el motor local |
+| Frontend | Implementado | Dashboard mobile/desktop responsive con visualización en tiempo real |
+| API Node | Implementado | Express 5, validación Zod, cliente FastAPI y proxy enriquecido |
+| Servicio IA | Implementado | FastAPI carga XGBoost y preprocessor desde `ai-service/vendor/BatteryGuard/models` |
+| Compilación frontend | Verificada | `npm run build` genera la salida de Vite en `dist/` sin errores |
+| Pruebas del backend | Verificadas | `npm test`: 3 pruebas aprobadas (validación, mapeo, precaución e índices) |
+| Integración frontend -> API | Implementado | Conexión activa a `POST /api/v1/recommendations/evaluate` con fallback local offline transparente |
+| Predicción PRECAUCIÓN | Implementado | Inferencia tri-estado (`APROBADO`, `PRECAUCION`, `DENEGADO`) calibrada con probabilidades de XGBoost |
+| Índices de estrés por IA | Implementado | 4 dimensiones calculadas (`Vulnerabilidad`, `Exigencia Mecánica`, `Estrés Térmico`, `Riesgo Combinado`) y regla prescriptiva asociada |
 
-El frontend puede ejecutarse de forma independiente. Para una evaluacion real mediante API se deben iniciar tambien FastAPI y el backend de Node.js.
+El frontend se conecta automáticamente al backend si está disponible (`http://localhost:3000`). Si los servicios no están encendidos, conmuta de forma transparente al motor prescriptivo local para garantizar disponibilidad continua.
 
 ## Arquitectura
 
 ```text
-index.html                  Entrada web
-src/                        Dashboard y motor prescriptivo local
-backend/                    API REST Node.js + Express
-ai-service/                 Servicio de inferencia Python + FastAPI
-docs/architecture.md        Contrato tecnico y limitaciones
+index.html                  Entrada web principal
+src/                        Dashboard UI y cliente de recomendación
+  ├── components/           Componentes modulares (Panel, Veredicto, Gráfico, etc.)
+  ├── data/                 Escenarios operativos y catálogo de flota
+  └── services/             Motor de inferencia con conexión a API y fallback local
+backend/                    API REST Gateway (Node.js + Express 5 + Zod)
+ai-service/                 Microservicio de inferencia (Python 3.11 + FastAPI + XGBoost)
 ai-service/vendor/BatteryGuard/
-                            Checkout local con los artefactos del modelo
+                            Modelos entrenados: battery_xgboost_v1.joblib y preprocessor.joblib
+docs/architecture.md        Contrato técnico, cálculo de índices y reglas prescriptivas
 ```
 
-El flujo disponible para la API es:
+El flujo operativo es:
 
 ```text
-Cliente -> POST /api/v1/recommendations/evaluate
-        -> validacion y mapeo
-        -> POST /predict
-        -> modelo XGBoost
-        -> prediccion y confianza
+Dashboard Web -> POST /api/v1/recommendations/evaluate (Node.js :3000)
+              -> Validación Zod y mapeo canónico
+              -> POST /predict (FastAPI :8000)
+              -> Inferencia XGBoost + probabilidades
+              -> Cálculo de índices de estrés (Vulnerabilidad, Mecánica, Térmico, Combinado)
+              -> Determinación de dictamen (APROBADO, PRECAUCIÓN, DENEGADO)
+              -> Respuesta con regla y justificación técnica al Frontend
 ```
 
-## Tecnologias
+## Tecnologías
 
-- Frontend: HTML5, JavaScript ES modules, Tailwind CSS y Vite
-- Backend: Node.js 20+, Express 5, Zod y Fetch API
-- IA: Python, FastAPI, Pydantic, pandas, scikit-learn y XGBoost
-- Modelo: `battery_xgboost_v1.joblib` y `preprocessor.joblib`
+- **Frontend:** HTML5, JavaScript moderno (ES Modules), Tailwind CSS y Vite.
+- **Backend:** Node.js 20+, Express 5, Zod, CORS y Fetch API nativo.
+- **Servicio de IA:** Python 3.11, FastAPI, Pydantic, pandas (v2.2.3 estable), scikit-learn y XGBoost.
+- **Modelos:** `battery_xgboost_v1.joblib` y `preprocessor.joblib` (en `ai-service/vendor/BatteryGuard/models`).
 
-## Ejecucion en Windows
+---
 
-### 1. Frontend
+## Ejecución en Windows (Paso a Paso)
+
+### 1. Iniciar el Servicio de Inferencia (Python + FastAPI)
+
+Desde la raíz del proyecto (`C:\Users\erick\OneDrive\Documentos\TIProyects\IA`):
 
 ```powershell
-npm install
-npm run dev
+# Utilizando el entorno virtual de Python
+$py = "C:\venvs\batteryguard\Scripts\python.exe"
+
+# O si tienes un venv local:
+# .\ai-service\.venv\Scripts\Activate.ps1
+
+& $py -m uvicorn app.main:app --app-dir ai-service --reload --port 8000
 ```
 
-Vite sirve el dashboard normalmente en `http://localhost:5173`.
+> **Verificación:** Abre [http://localhost:8000/health](http://localhost:8000/health) y la documentación interactiva OpenAPI en [http://localhost:8000/docs](http://localhost:8000/docs).
 
-Comandos disponibles:
+### 2. Iniciar la API Gateway (Node.js + Express)
 
-```powershell
-npm run build    # Compila el frontend
-npm run preview  # Previsualiza la compilacion
-npm run serve    # Sirve archivos con serve
-```
-
-### 2. Servicio de inferencia
-
-Desde la raiz:
-
-```powershell
-.\ai-service\.venv\Scripts\Activate.ps1
-python -m pip install -r ai-service\requirements.txt
-$env:BATTERYGUARD_MODEL_DIR = (Resolve-Path .\ai-service\vendor\BatteryGuard\models).Path
-python -m uvicorn app.main:app --app-dir ai-service --reload --port 8000
-```
-
-El servicio expone:
-
-- `GET /health`
-- `POST /predict`
-
-Ejemplo de entrada:
-
-```json
-{
-  "SOH": "Degradada",
-  "Topografia": "Montanosa",
-  "Clima": "Calor Extremo"
-}
-```
-
-### 3. API Node
-
-En otra terminal:
+En una segunda terminal:
 
 ```powershell
 Set-Location backend
-Copy-Item .env.example .env
 npm install
 npm run dev
 ```
 
-La API queda normalmente en `http://localhost:3000`.
+La API escuchará en `http://localhost:3000`.
 
 Endpoints principales:
-
 - `GET /api/v1/health`
 - `POST /api/v1/recommendations/evaluate`
 
-Ejemplo:
+Ejemplo de prueba en PowerShell:
 
 ```powershell
 $body = @{
   unit = "EV-100000"
-  battery = "Mala"
+  battery = "Buena"
   route = "Montaña"
-  weather = "Extremo"
+  weather = "Templado"
 } | ConvertTo-Json
 
 Invoke-RestMethod `
@@ -126,26 +104,34 @@ Invoke-RestMethod `
   -Body $body
 ```
 
-## Pruebas
+### 3. Iniciar el Frontend (Dashboard)
+
+En una tercera terminal (desde la raíz):
+
+```powershell
+npm run dev
+```
+
+Abre [http://localhost:5173](http://localhost:5173) en tu navegador. Al presionar **Evaluar Asignación**, el dashboard consultará en vivo al backend y mostrará la insignia:
+`🟢 IA Live (XGBoost API)` con la confianza de la predicción y las barras de estrés actualizadas.
+
+---
+
+## Pruebas Automatizadas
 
 ```powershell
 Set-Location backend
 npm test
 ```
 
-Las pruebas verifican el mapeo de valores del dashboard al esquema del modelo y el flujo de la ruta de recomendaciones con un servicio IA de prueba.
+Las 3 pruebas verifican:
+1. Mapeo de valores del dashboard a categorías del modelo.
+2. Validación de payloads con Zod y flujo completo hacia el servicio de IA.
+3. Soporte del veredicto **PRECAUCIÓN** y recepción de los 4 índices de estrés numéricos.
 
-## Limitaciones conocidas
+---
 
-- El modelo recibe `SOH`, `Topografia` y `Clima`; no recibe el identificador de unidad ni calcula directamente los indices de estres.
-- `Media` y `Mala` se agrupan como `Degradada`.
-- `Urbana` se agrupa como `Plana`.
-- `Frío` y `Cálido` se agrupan como `Templado`.
-- El modelo devuelve solo dos etiquetas: `APROBADO` y `DENEGADO`.
-- Las equivalencias de entrada deben ser validadas por el equipo de dominio antes de utilizar el sistema como soporte operativo.
-- Los endpoints no sustituyen actualmente la logica prescriptiva completa del dashboard.
+## Documentación Técnica
 
-## Documentacion
-
-- [Arquitectura y contrato tecnico](docs/architecture.md)
-- [Integracion de BatteryGuard](ai-service/vendor/BatteryGuard/README.md)
+- [Arquitectura del Sistema y Contrato de Inferencia](docs/architecture.md)
+- [Artefactos y Entrenamiento de BatteryGuard](ai-service/vendor/BatteryGuard/README.md)

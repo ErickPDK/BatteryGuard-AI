@@ -1,104 +1,122 @@
 # BatteryGuard AI - Arquitectura del Sistema de Recomendación
 
 ## 1. Visión General
-**BatteryGuard AI** es una solución Frontend de analítica prescriptiva diseñada bajo el enfoque **Mobile-First** para la gestión operativa y asignación inteligente de vehículos eléctricos (EV) a rutas de reparto o transporte.
+**BatteryGuard AI** es una solución integral de analítica prescriptiva diseñada bajo el enfoque **Mobile-First** para la gestión operativa y asignación inteligente de vehículos eléctricos (EV) a rutas de reparto o transporte.
 
-El sistema analiza en tiempo real el estado de desgaste de la batería (**State of Health - SoH**), la topografía de la ruta y las condiciones climáticas pronosticadas para prescribir si un vehículo debe ser **APROBADO**, despachado con **PRECAUCIÓN** o **DENEGADO (Bloqueo preventivo)** para evitar fallas en vía y degradación acelerada de las celdas.
+El sistema analiza en tiempo real el estado de desgaste de la batería (**State of Health - SoH**), la topografía de la ruta y las condiciones climáticas pronosticadas para prescribir si un vehículo debe ser:
+- 🟢 **APROBADO**: Despacho seguro con degradación mínima.
+- 🟡 **PRECAUCIÓN**: Despacho condicional con telemetría intensiva y límite de descarga.
+- 🔴 **DENEGADO**: Bloqueo preventivo imperativo ante riesgo de paro en vía o degradación irreversible.
 
 ---
 
-## 2. Estructura del sistema
+## 2. Estructura del Sistema
+
 ```text
-batteryguard-ai/
-├── index.html
-├── package.json                 # Frontend Vite
-├── src/                         # Dashboard y motor local actual
-├── backend/                     # API REST en Node.js + Express
+IA/
+├── index.html                   # Punto de entrada web con meta viewport móvil
+├── package.json                 # Scripts Vite del Frontend
+├── src/                         # Código fuente del Frontend
+│   ├── app.js                   # Orquestador reactivo de interfaz y llamadas asíncronas
+│   ├── components/              # Componentes de UI (Header, Panel, Dictamen, Barras, etc.)
+│   ├── data/                    # Matriz de 8 escenarios y catálogo de unidades EV
+│   └── services/                # recommendationEngine.js con cliente API y fallback local
+├── backend/                     # API REST Gateway (Node.js + Express 5 + Zod)
 │   ├── package.json
 │   ├── .env.example
 │   ├── src/
-│   │   ├── app.js
-│   │   ├── server.js
-│   │   ├── routes/
-│   │   ├── middleware/
-│   │   └── services/            # Adaptador de entrada y cliente del servicio IA
-│   └── test/
-├── ai-service/                  # API de inferencia Python + FastAPI
-│   ├── app/main.py
-│   └── requirements.txt
-└── docs/architecture.md
+│   │   ├── app.js               # Configuración Express y CORS
+│   │   ├── server.js            # Servidor HTTP en puerto 3000
+│   │   ├── routes/              # recommendationRoutes.js (/api/v1/recommendations)
+│   │   ├── middleware/          # errorHandler.js
+│   │   └── services/            # aiServiceClient.js y modelInputMapper.js
+│   └── test/                    # Pruebas automatizadas (node:test)
+├── ai-service/                  # Microservicio de Inferencia (Python 3.11 + FastAPI + Uvicorn)
+│   ├── app/main.py              # Inferencia XGBoost, cálculo de índices y reglas prescriptivas
+│   ├── requirements.txt         # Dependencias fijadas y estables
+│   └── vendor/BatteryGuard/     # Repositorio base con artefactos entrenados
+│       └── models/
+│           ├── battery_xgboost_v1.joblib
+│           └── preprocessor.joblib
+└── docs/architecture.md         # Este documento técnico
 ```
 
 ---
 
 ## 3. Variables de Entrada y Dimensiones de Análisis
 
-| Dimensión | Valores Posibles | Impacto Físico en el Vehículo EV |
-| :--- | :--- | :--- |
-| **Salud Batería (SoH)** | Buena (>85%), Media (70-84%), Mala (<70%) | Resistencia interna del pack, riesgo de caída de tensión bajo carga (*voltage sag*). |
-| **Topografía** | Plana, Urbana, Montaña | Demanda de par motriz (*torque*), corrientes C-rate sostenidas y estrés por regeneración. |
-| **Clima Esperado** | Templado, Frío, Cálido, Extremo | Eficiencia electroquímica, sobrecarga del sistema de refrigeración líquida o calefacción de cabina. |
+| Dimensión | Opciones del Dashboard | Mapeo Canónico XGBoost | Impacto Físico en el Pack EV |
+| :--- | :--- | :--- | :--- |
+| **Salud Batería (SoH)** | Buena (>85%), Media (70-84%), Mala (<70%) | `Optima` (Buena) / `Degradada` (Media, Mala) | Resistencia interna, riesgo de caída brusca de tensión (*voltage sag*). |
+| **Topografía** | Plana, Urbana, Montaña | `Plana` (Plana, Urbana) / `Montanosa` (Montaña) | Demanda de par motor (*torque*), corrientes C-rate sostenidas y regeneración. |
+| **Clima Esperado** | Templado, Frío, Cálido, Extremo | `Templado` (Templado, Frío, Cálido) / `Calor Extremo` (Extremo) | Eficiencia electroquímica y carga sobre el sistema de refrigeración líquida/BMS. |
 
 ---
 
-## 4. Índices de Estrés Evaluados
+## 4. Índices de Estrés Evaluados por la IA
 
-1. **Vulnerabilidad (Azul):** Sensibilidad del pack de baterías a la degradación irreparable según su salud actual (SoH) y fatiga previa.
-2. **Exigencia Mecánica (Verde):** Carga motriz requerida por la topografía y gradiente de elevación.
-3. **Estrés Térmico (Amarillo):** Temperatura proyectada en los módulos de celdas por la interacción entre clima y potencia.
-4. **Riesgo Combinado (Rojo):** Índice ponderado de riesgo de detención en ruta o pérdida de ciclo de vida acelerado.
+El servicio de inferencia calcula numéricamente los 4 índices de estrés porcentual (0-100%):
 
----
-
-## 5. Matriz de los 8 Escenarios Operativos
-
-| # | Escenario | Batería | Topografía | Clima | Vuln. | Exig. Mec. | Estrés Térm. | Riesgo Comb. | Dictamen |
-|---|---|---|---|---|---|---|---|---|---|
-| 1 | Óptimo general | Buena | Plana | Templado | 15% | 10% | 8% | 12% | **Aprobado** |
-| 2 | Ruta montaña | Buena | Montaña | Templado | 35% | 55% | 20% | 42% | **Precaución** |
-| 3 | Clima extremo | Buena | Plana | Extremo | 60% | 30% | 85% | 78% | **Denegado** |
-| 4 | Batería degradada | Mala | Plana | Templado | 80% | 25% | 30% | 72% | **Denegado** |
-| 5 | Carga parcial | Media | Plana | Templado | 25% | 15% | 12% | 20% | **Aprobado** |
-| 6 | Urbano nocturno | Buena | Urbana | Frío | 20% | 12% | 18% | 18% | **Aprobado** |
-| 7 | Carga + montaña | Media | Montaña | Cálido | 45% | 60% | 35% | 55% | **Precaución** |
-| 8 | Peor caso | Mala | Montaña | Extremo | 90% | 85% | 92% | 95% | **Denegado** |
+1. **Vulnerabilidad (Azul):** Sensibilidad intrínseca del pack a la pérdida irreversible de capacidad, calculada a partir del SoH del vehículo y ajustada con la probabilidad de falla emitida por XGBoost.
+2. **Exigencia Mecánica (Verde):** Carga motriz y estrés de potencia cinemática impuestos por el gradiente de elevación o paradas continuas.
+3. **Estrés Térmico (Amarillo):** Temperatura interna proyectada en los módulos de celdas por sobrecarga térmica y temperatura ambiental.
+4. **Riesgo Combinado (Rojo):** Índice ponderado de riesgo de detención en ruta:
+   $$\text{Riesgo Combinado} = 0.40 \cdot \text{Vuln} + 0.30 \cdot \text{Mec} + 0.30 \cdot \text{Térm}$$
+   Alineado y calibrado con la probabilidad de clase 1 de XGBoost: $P(\text{Falla})$.
 
 ---
 
-## 6. API Node y servicio de inferencia
+## 5. Inferencia Prescriptiva Tri-Estado (APROBADO, PRECAUCIÓN, DENEGADO)
 
-La API Node (`backend/`) expone:
+A diferencia del clasificador binario puro de laboratorio, el servicio de inferencia prescriptiva (`ai-service/app/main.py`) opera en 3 zonas:
 
-- `GET /api/v1/health`: estado de la API.
-- `POST /api/v1/recommendations/evaluate`: recibe `{ "unit", "battery", "route", "weather" }`, valida los datos, adapta las categorías y llama al servicio IA.
+* **APROBADO:** $\text{Riesgo Combinado} \le 25\%$ y parámetros térmicos seguros.
+* **PRECAUCIÓN:** $26\% \le \text{Riesgo Combinado} \le 60\%$. Típico en rutas de montaña con batería intermedia o climas exigentes sin riesgo inminente de apagado.
+* **DENEGADO:** $\text{Riesgo Combinado} > 60\%$ o vulnerabilidad/estrés térmico crítico ($\ge 75\%$). Se activa el bloqueo preventivo del vehículo.
 
-El servicio Python (`ai-service/`) expone `POST /predict` y carga `battery_xgboost_v1.joblib` y `preprocessor.joblib`. Por defecto busca los artefactos en `ai-service/vendor/BatteryGuard/models`, que es el checkout local incluido en el workspace. `BATTERYGUARD_MODEL_DIR` puede apuntar a otra carpeta `models`.
+---
 
-El modelo existente solo predice `APROBADO` o `DENEGADO` con tres variables categóricas. No calcula `PRECAUCION` ni los índices de estrés del dashboard. Para adaptar las opciones actuales del formulario a las categorías con las que se entrenó, la API agrupa `Media/Mala` como `Degradada`, `Urbana` como `Plana`, y `Frío/Cálido` como `Templado`; estas simplificaciones se devuelven explícitamente en la respuesta. Revisar y validar estas equivalencias con el equipo de dominio antes de usar predicciones en operaciones reales.
+## 6. Contrato de la API
 
-La interfaz existente todavía usa su motor local en `src/services/recommendationEngine.js`; conectar y adaptar su respuesta al nuevo contrato es un siguiente paso, no parte de esta estructura inicial.
+### Inferencia en FastAPI (`POST http://localhost:8000/predict`)
 
-### Ejecución local (Windows PowerShell)
-
-Desde la raíz del proyecto:
-
-```powershell
-# Solo si ai-service\vendor\BatteryGuard no existe:
-git clone git@github.com:AsaelCastilloArana/BatteryGuard.git ai-service\vendor\BatteryGuard
-
-python -m pip install -r ai-service\vendor\BatteryGuard\requirements.txt
-python -m pip install -r ai-service\requirements.txt
-$env:BATTERYGUARD_MODEL_DIR = (Resolve-Path .\ai-service\vendor\BatteryGuard\models).Path
-python -m uvicorn app.main:app --app-dir ai-service --reload --port 8000
+**Payload de entrada:**
+```json
+{
+  "unit": "EV-100000",
+  "battery": "Buena",
+  "route": "Montaña",
+  "weather": "Templado"
+}
 ```
 
-En otra terminal, desde la raíz:
-
-```powershell
-Set-Location backend
-Copy-Item .env.example .env
-npm install
-npm run dev
+**Respuesta:**
+```json
+{
+  "unit": "EV-100000",
+  "inputMapped": {
+    "battery": "Buena",
+    "route": "Montaña",
+    "weather": "Templado",
+    "canonical": { "SOH": "Optima", "Topografia": "Montanosa", "Clima": "Templado" }
+  },
+  "classPrediction": 0,
+  "binaryLabel": "APROBADO",
+  "verdict": "PRECAUCION",
+  "confidence": 79.1,
+  "probabilities": { "safe": 79.1, "failure": 20.9 },
+  "indices": {
+    "vulnerability": 15,
+    "mechanicalDemand": 53,
+    "thermalStress": 20,
+    "combinedRisk": 28
+  },
+  "ruleId": "R-002: Despacho condicional (Montaña + Batería Buena)",
+  "justification": "Se autoriza asignación condicional para EV-100000. El vehículo puede operar pero la exigencia mecánica o térmica aconseja limitar velocidad y monitorear telemetría.",
+  "status": "success"
+}
 ```
 
-El frontend sigue arrancándose desde la raíz con `npm install` y `npm run dev`. Para probar el endpoint Node, enviar un `POST` JSON a `http://localhost:3000/api/v1/recommendations/evaluate`.
+### Gateway Node.js (`POST http://localhost:3000/api/v1/recommendations/evaluate`)
+
+Valida la entrada con Zod, orquesta la llamada a FastAPI y devuelve los datos enriquecidos directamente consumibles por el Dashboard web. Si la API no está en línea, el Frontend activa automáticamente su motor local en memoria para no interrumpir la experiencia de usuario.
