@@ -1,0 +1,26 @@
+{
+  "name": "batteryguard-ai-frontend",
+  "version": "2.1.0",
+  "description": "Dashboard Prescriptivo de Asignación de Rutas para Flotas EV basado en Desgaste de Batería e IA",
+  "main": "src/app.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "serve": "npx serve ."
+  },
+  "keywords": [
+    "ev-fleet",
+    "battery-health",
+    "route-recommendation",
+    "tailwind-css",
+    "mobile-first",
+    "prescriptive-analytics"
+  ],
+  "author": "Ops Fleet Management",
+  "license": "MIT",
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}

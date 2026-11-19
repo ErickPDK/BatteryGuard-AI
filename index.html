@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#1e293b">
+  <meta name="description" content="BatteryGuard AI - Dashboard Prescriptivo de Asignación de Rutas para Flotas de Vehículos Eléctricos">
+  <title>BatteryGuard AI - Asignación de Rutas EV</title>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN con configuración personalizada -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+          },
+          colors: {
+            gray: {
+              150: '#eceff1',
+              250: '#cfd8dc'
+            }
+          },
+          boxShadow: {
+            '2xs': '0 1px 2px 0 rgba(0, 0, 0, 0.03)',
+            'xs': '0 1px 3px 0 rgba(0, 0, 0, 0.05)',
+            'soft': '0 10px 30px -5px rgba(0, 0, 0, 0.05)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Estilos complementarios y animaciones -->
+  <link rel="stylesheet" href="./src/styles/main.css">
+</head>
+<body class="h-full bg-slate-100 font-sans antialiased text-gray-800 selection:bg-blue-100 selection:text-blue-700">
+  <!-- Contenedor Raíz de la Aplicación -->
+  <div id="app" class="min-h-full"></div>
+
+  <!-- Script Modular Principal -->
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>
