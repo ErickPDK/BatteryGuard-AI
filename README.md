@@ -1,135 +1,151 @@
-# 🔋 BatteryGuard AI — Dashboard Prescriptivo de Asignación de Rutas EV
+# BatteryGuard AI
 
-> Sistema inteligente para flotas de vehículos eléctricos (EV) que utiliza analítica prescriptiva e IA para recomendar la asignación óptima de rutas según el estado de salud de la batería (**SoH**), topografía del terreno y condiciones climáticas.
+Dashboard prescriptivo para la asignacion de rutas de una flota de vehiculos electricos. El proyecto combina un frontend responsive, una API REST y un servicio de inferencia con el modelo XGBoost de BatteryGuard.
 
----
+## Estado actual
 
-## 📱 Vistas del Sistema (Diseño Mobile-First Fiel al PDF)
+| Componente | Estado | Detalle |
+|---|---|---|
+| Frontend | Implementado | Dashboard mobile/desktop y motor local con 8 escenarios |
+| API Node | Implementado | Express 5, validacion Zod, mapeo de variables y cliente FastAPI |
+| Servicio IA | Implementado | FastAPI carga los artefactos XGBoost desde la carpeta configurada |
+| Compilacion frontend | Verificada | `npm run build` genera la salida de Vite en `dist/` |
+| Pruebas del backend | Verificadas | `npm test`: 2 pruebas aprobadas |
+| Integracion frontend -> API | Pendiente | El dashboard sigue usando `RecommendationEngine` local |
+| Prediccion PRECAUCION | Pendiente | El modelo actual solo devuelve `APROBADO` o `DENEGADO` |
+| Indices de estres por IA | Pendiente | Los indices siguen siendo calculados por el motor local |
 
-Este frontend fue construido siguiendo al 100% los diagramas y wireframes de especificación técnica del PDF:
+El frontend puede ejecutarse de forma independiente. Para una evaluacion real mediante API se deben iniciar tambien FastAPI y el backend de Node.js.
 
-1. **Página 1 (Mobile - Inicio y Configuración):**
-   - Barra de estado móvil superior (*9:41 AM, 100% batería*).
-   - Branding: **BatteryGuard AI** (badge `v2.1`), subtítulo *"Dashboard Prescriptivo de Flota EV"* y equipo *"Ops Fleet Management"*.
-   - 3 Tarjetas KPI principales:
-     - **Cobertura de escenarios:** `8/8`
-     - **Asignaciones seguras:** `94%` (verde esmeralda)
-     - **Bloqueos preventivos:** `3` (rojo preventivo)
-   - **Panel de Control:** Selector de unidad (`EV-100000`), Salud de Batería (`Buena`, `Media`, `Mala`), Topografía de Ruta (`Plana`, `Urbana`, `Montaña`) y Clima Esperado (`Templado`, `Frío`, `Cálido`, `Extremo`), con botones de **Evaluar Asignación** y **Restablecer**, más el indicador *"Desliza para ver resultados"*.
-
-2. **Página 2 (Mobile - Resultados & Dictamen):**
-   - **Dictamen Prescriptivo:** Card de veredicto con bordes e insignias dinámicas (`APROBADO`, `PRECAUCION`, `DENEGADO`).
-   - Caja de **Regla activada** (ej. `R-001: Bateria saludable + Ruta plana + Clima templado`).
-   - Párrafo de **Justificación técnica** explicativa generada por la IA.
-   - Píldoras de acceso rápido a los otros estados.
-   - **Índices de Estrés:** Gráfica de barras verticales calibrada al 100% con líneas guía:
-     - 🟦 **Vulnerabilidad** (35%)
-     - 🟩 **Exigencia Mecánica** (22%)
-     - 🟨 **Estrés Térmico** (18%)
-     - 🟥 **Riesgo Combinado** (28%)
-     - Leyenda inferior interactiva con indicadores circulares por color.
-
-3. **Página 3 (Mobile - Base de Conocimientos):**
-   - Filtros de estado: `Todas`, `Aprobadas`, `Precaucion`, `Denegadas`.
-   - Listado de los **8 Escenarios Operativos** oficiales con sus columnas (`#`, `Escenario`, `Bateria`, `Ruta`, `Dictamen`).
-   - Interacción: Al tocar cualquier escenario de la lista, se carga inmediatamente en el Panel de Control y recalcula la evaluación.
-
-4. **Página 4 (Desktop - Dashboard Integral):**
-   - Distribución responsive en pantalla completa con barra superior simulada `batteryguard.ai/dashboard`.
-   - Disposición en 2 columnas: Columna izquierda con el Panel de Control y Columna derecha con Dictamen Prescriptivo e Índices de Estrés.
-   - Tabla expandida a ancho completo con métricas detalladas para cada escenario.
-
----
-
-## 📂 Estructura del Sistema de Carpetas
-
-La arquitectura de archivos fue diseñada siguiendo los estándares modernos para proyectos Frontend escalables y listos para Git:
+## Arquitectura
 
 ```text
-batteryguard-ai/
-├── index.html                   # Punto de entrada HTML5 con Tailwind CSS
-├── package.json                 # Definición del proyecto, scripts y dependencias
-├── .gitignore                   # Archivo de ignorados estándar para Git
-├── README.md                    # Guía principal del proyecto
-├── docs/
-│   └── architecture.md          # Especificación técnica, reglas e índices de estrés
-└── src/
-    ├── app.js                   # Orquestador del estado de la aplicación y eventos
-    ├── components/              # Componentes de interfaz modulares y reutilizables
-    │   ├── Header.js            # StatusBar móvil, branding institucional y KPIs
-    │   ├── ControlPanel.js      # Formulario reactivo de evaluación de unidad y ruta
-    │   ├── PrescriptiveResult.js# Card de veredicto, regla activada y justificación técnica
-    │   ├── StressChart.js       # Gráfico de barras de Índices de Estrés (0-100%)
-    │   ├── KnowledgeBase.js     # Base de conocimientos de 8 escenarios y filtros
-    │   └── Navigation.js        # Barra inferior móvil y selector de vista
-    ├── data/                    # Datos estáticos y telemetría simulada
-    │   ├── scenarios.js         # Los 8 escenarios operativos oficiales del PDF
-    │   └── fleet.js             # Catálogo de vehículos EV y opciones de formulario
-    ├── services/                # Capa de lógica de negocio y analítica
-    │   └── recommendationEngine.js # Motor prescriptivo e inferencia de desgaste
-    └── styles/                  # Hojas de estilo y diseño
-        └── main.css             # Estilos de Tailwind, animaciones y mobile shell
+index.html                  Entrada web
+src/                        Dashboard y motor prescriptivo local
+backend/                    API REST Node.js + Express
+ai-service/                 Servicio de inferencia Python + FastAPI
+docs/architecture.md        Contrato tecnico y limitaciones
+ai-service/vendor/BatteryGuard/
+                            Checkout local con los artefactos del modelo
 ```
 
----
+El flujo disponible para la API es:
 
-## 🚀 Cómo Ejecutar el Proyecto
+```text
+Cliente -> POST /api/v1/recommendations/evaluate
+        -> validacion y mapeo
+        -> POST /predict
+        -> modelo XGBoost
+        -> prediccion y confianza
+```
 
-Tienes dos opciones muy sencillas:
+## Tecnologias
 
-### Opción 1: Sin instalación (Directo en el navegador)
-Simplemente haz doble clic o abre el archivo `index.html` en tu navegador favorito (Chrome, Edge, Firefox, Safari). Tailwind CSS y todos los módulos cargarán de forma instantánea.
+- Frontend: HTML5, JavaScript ES modules, Tailwind CSS y Vite
+- Backend: Node.js 20+, Express 5, Zod y Fetch API
+- IA: Python, FastAPI, Pydantic, pandas, scikit-learn y XGBoost
+- Modelo: `battery_xgboost_v1.joblib` y `preprocessor.joblib`
 
-### Opción 2: Con servidor local (Vite / Node.js)
-Si deseas ejecutarlo como un proyecto Node con recarga en caliente:
+## Ejecucion en Windows
 
-```bash
-# 1. Ingresar a la carpeta del proyecto
-cd batteryguard-ai
+### 1. Frontend
 
-# 2. Instalar dependencias de desarrollo
+```powershell
 npm install
-
-# 3. Iniciar el servidor local
 npm run dev
 ```
 
----
+Vite sirve el dashboard normalmente en `http://localhost:5173`.
 
-## 📦 Cómo Agregar a un Nuevo Repositorio Git
+Comandos disponibles:
 
-Para crear tu propio repositorio Git con esta base de código:
-
-```bash
-# 1. Ubicarse en el directorio del proyecto
-cd batteryguard-ai
-
-# 2. Inicializar el repositorio Git
-git init
-
-# 3. Agregar todos los archivos estructurados
-git add .
-
-# 4. Crear el commit inicial
-git commit -m "feat: frontend mobile-first BatteryGuard AI v2.1 con Tailwind CSS y motor prescriptivo"
-
-# 5. Conectar con tu repositorio remoto (GitHub, GitLab, Bitbucket, etc.)
-git branch -M main
-git remote add origin https://github.com/TU_USUARIO/batteryguard-ai.git
-git push -u origin main
+```powershell
+npm run build    # Compila el frontend
+npm run preview  # Previsualiza la compilacion
+npm run serve    # Sirve archivos con serve
 ```
 
----
+### 2. Servicio de inferencia
 
-## 🛠️ Tecnologías Utilizadas
+Desde la raiz:
 
-- **HTML5 Semántico:** Estructura accesible (`header`, `main`, `section`, `nav`, `aside`).
-- **Tailwind CSS:** Diseño mobile-first con utilidades modernas y paleta cromática de alta fidelidad.
-- **JavaScript Moderno (ES6+ Modules):** Componentes limpios sin dependencias pesadas, listos para portar a React, Vue, Svelte o Next.js.
-- **Inter Font:** Tipografía clara y moderna para dashboards corporativos de transporte.
+```powershell
+.\ai-service\.venv\Scripts\Activate.ps1
+python -m pip install -r ai-service\requirements.txt
+$env:BATTERYGUARD_MODEL_DIR = (Resolve-Path .\ai-service\vendor\BatteryGuard\models).Path
+python -m uvicorn app.main:app --app-dir ai-service --reload --port 8000
+```
 
-## Preparación del backend y el modelo
+El servicio expone:
 
-Se agregó una API REST independiente en `backend/` (Node.js + Express) y un servicio de inferencia en `ai-service/` (Python + FastAPI). El modelo sigue viviendo en su repositorio original: [AsaelCastilloArana/BatteryGuard](https://github.com/AsaelCastilloArana/BatteryGuard); sus datos y artefactos no se copian a este proyecto.
+- `GET /health`
+- `POST /predict`
 
-Consulta [`docs/architecture.md`](docs/architecture.md) para el contrato, las limitaciones del modelo y los pasos de instalación y ejecución en Windows. El dashboard todavía usa su motor local; la integración de la interfaz con la API queda como siguiente paso.
+Ejemplo de entrada:
+
+```json
+{
+  "SOH": "Degradada",
+  "Topografia": "Montanosa",
+  "Clima": "Calor Extremo"
+}
+```
+
+### 3. API Node
+
+En otra terminal:
+
+```powershell
+Set-Location backend
+Copy-Item .env.example .env
+npm install
+npm run dev
+```
+
+La API queda normalmente en `http://localhost:3000`.
+
+Endpoints principales:
+
+- `GET /api/v1/health`
+- `POST /api/v1/recommendations/evaluate`
+
+Ejemplo:
+
+```powershell
+$body = @{
+  unit = "EV-100000"
+  battery = "Mala"
+  route = "Montaña"
+  weather = "Extremo"
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Uri "http://localhost:3000/api/v1/recommendations/evaluate" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body $body
+```
+
+## Pruebas
+
+```powershell
+Set-Location backend
+npm test
+```
+
+Las pruebas verifican el mapeo de valores del dashboard al esquema del modelo y el flujo de la ruta de recomendaciones con un servicio IA de prueba.
+
+## Limitaciones conocidas
+
+- El modelo recibe `SOH`, `Topografia` y `Clima`; no recibe el identificador de unidad ni calcula directamente los indices de estres.
+- `Media` y `Mala` se agrupan como `Degradada`.
+- `Urbana` se agrupa como `Plana`.
+- `Frío` y `Cálido` se agrupan como `Templado`.
+- El modelo devuelve solo dos etiquetas: `APROBADO` y `DENEGADO`.
+- Las equivalencias de entrada deben ser validadas por el equipo de dominio antes de utilizar el sistema como soporte operativo.
+- Los endpoints no sustituyen actualmente la logica prescriptiva completa del dashboard.
+
+## Documentacion
+
+- [Arquitectura y contrato tecnico](docs/architecture.md)
+- [Integracion de BatteryGuard](ai-service/vendor/BatteryGuard/README.md)

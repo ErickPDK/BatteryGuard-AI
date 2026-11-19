@@ -72,7 +72,7 @@ La API Node (`backend/`) expone:
 - `GET /api/v1/health`: estado de la API.
 - `POST /api/v1/recommendations/evaluate`: recibe `{ "unit", "battery", "route", "weather" }`, valida los datos, adapta las categorías y llama al servicio IA.
 
-El servicio Python (`ai-service/`) expone `POST /predict` y carga `battery_xgboost_v1.joblib` y `preprocessor.joblib` desde el repositorio externo [BatteryGuard](https://github.com/AsaelCastilloArana/BatteryGuard). Los artefactos no se copian ni se versionan en este proyecto. `BATTERYGUARD_MODEL_DIR` debe apuntar a la carpeta `models` de ese checkout.
+El servicio Python (`ai-service/`) expone `POST /predict` y carga `battery_xgboost_v1.joblib` y `preprocessor.joblib`. Por defecto busca los artefactos en `ai-service/vendor/BatteryGuard/models`, que es el checkout local incluido en el workspace. `BATTERYGUARD_MODEL_DIR` puede apuntar a otra carpeta `models`.
 
 El modelo existente solo predice `APROBADO` o `DENEGADO` con tres variables categóricas. No calcula `PRECAUCION` ni los índices de estrés del dashboard. Para adaptar las opciones actuales del formulario a las categorías con las que se entrenó, la API agrupa `Media/Mala` como `Degradada`, `Urbana` como `Plana`, y `Frío/Cálido` como `Templado`; estas simplificaciones se devuelven explícitamente en la respuesta. Revisar y validar estas equivalencias con el equipo de dominio antes de usar predicciones en operaciones reales.
 
@@ -83,7 +83,9 @@ La interfaz existente todavía usa su motor local en `src/services/recommendatio
 Desde la raíz del proyecto:
 
 ```powershell
+# Solo si ai-service\vendor\BatteryGuard no existe:
 git clone git@github.com:AsaelCastilloArana/BatteryGuard.git ai-service\vendor\BatteryGuard
+
 python -m pip install -r ai-service\vendor\BatteryGuard\requirements.txt
 python -m pip install -r ai-service\requirements.txt
 $env:BATTERYGUARD_MODEL_DIR = (Resolve-Path .\ai-service\vendor\BatteryGuard\models).Path
